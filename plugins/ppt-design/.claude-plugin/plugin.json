@@ -1,0 +1,19 @@
+{
+  "name": "ppt-design",
+  "version": "1.0.0",
+  "description": "디자인 시스템으로 고칠 수 있는 PPT(.pptx)를 만들어요. DESIGN.md나 색·글꼴을 주면 그 스타일로, 안 주면 기본 테마로. 제안서·보고서·강의·가이드북, 레이아웃 58종, 한글 줄바꿈과 글꼴을 맞춰 둠.",
+  "author": {
+    "name": "daniel.kim"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/daniel-kim-9way/ppt-design",
+  "keywords": [
+    "claude-code",
+    "skill",
+    "pptx",
+    "presentation",
+    "slides",
+    "design-system",
+    "korean"
+  ]
+}

@@ -137,6 +137,19 @@ def picture(slide, x, y, w, h, path=None, frame=True, radius=10,
 # ---------------------------------------------------------------------------
 # 텍스트
 # ---------------------------------------------------------------------------
+def set_typefaces(rPr, latin, ko=None):
+    """run/글자 속성(rPr)에 영문(latin)·한글(ea)·기타(cs) 글꼴을 넣는다.
+    Inter처럼 한글이 없는 글꼴을 ea 에 넣으면 PC마다 다른 글꼴로 대신 그려져
+    한 문장 안에서 글자 굵기가 섞여 보인다. 그래서 한글은 따로 지정한다."""
+    ko = ko or latin
+    for tag, face in (('a:latin', latin), ('a:ea', ko), ('a:cs', ko)):
+        el = rPr.find(qn(tag))
+        if el is None:
+            el = rPr.makeelement(qn(tag), {})
+            rPr.append(el)
+        el.set('typeface', face)
+
+
 def _apply_run(run, type_token=None, size_px=None, weight=None,
                color="ink", tracking_px=None, mono=False):
     if type_token:
@@ -160,20 +173,17 @@ def _apply_run(run, type_token=None, size_px=None, weight=None,
             and T.FONT_DISPLAY != T.FONT_BODY and fam == T.FONT_BODY):
         fam = T.FONT_DISPLAY
         bold = weight in T.HEAVY
+    # 한글(ea/cs) 글꼴: 테마에 ko 가 없으면 영문과 같은 글꼴
+    ko_fam = T.KO_WEIGHT_MAP.get(weight, T.FONT_KO)
     if mono:
         fam = T.FONT_MONO; bold = False
+        ko_fam = T.FONT_KO
     run.font.name = fam
     run.font.size = pt(size_px)
     run.font.bold = bold
     run.font.color.rgb = rgb(color)
-    # 한글/라틴 모두 동일 폰트 지정 (ea/cs)
     rPr = run._r.get_or_add_rPr()
-    for tag in ('a:latin', 'a:ea', 'a:cs'):
-        el = rPr.find(qn(tag))
-        if el is None:
-            el = rPr.makeelement(qn(tag), {})
-            rPr.append(el)
-        el.set('typeface', fam)
+    set_typefaces(rPr, fam, ko_fam)
     # 자간 (spc, 1/100 pt). px → pt → *100
     spc = int(round(tracking_px * PT_PER_PX * 100))
     if spc != 0:
@@ -324,7 +334,7 @@ def add_table(slide, x, y, w, h, data, col_widths=None,
               label_col=False, label_fill="surface_card"):
     """
     data: 2차원 리스트 (행 x 열). data[0]가 헤더.
-    highlight_col: 강조할 열 인덱스(0-base) — 9WAY 컬럼 등.
+    highlight_col: 강조할 열 인덱스(0-base) — 우리 쪽 열 등.
     """
     rows = len(data)
     cols = len(data[0])
@@ -369,3 +379,198 @@ def add_table(slide, x, y, w, h, data, col_widths=None,
                        weight=weight, color=txt_c)
             _cell_border(cell, color=border, w_pt=1.0)
     return tbl
+
+
+# ---------------------------------------------------------------------------
+# 사진 유틸 (2026-07 추가) — 실사·스크린샷을 쓰는 브로셔/제안서용
+#   picture() 는 비율 유지 fit 이라 박스에 여백이 남는다. 아래 3종은
+#   ① 박스를 꽉 채우거나(photo_fill) ② 흰 카드 안에 온전히 담거나(shot_card)
+#   ③ 라운드/알약 마스크를 씌운다(mask_photo).
+#   생성한 파생 이미지는 cache_dir(기본: 임시 폴더/ppt-design-imgcache)에 캐시한다.
+# ---------------------------------------------------------------------------
+import os as _os
+import hashlib as _hashlib
+import tempfile as _tempfile
+
+
+def _cache_path(src, tag, cache_dir=None):
+    src = str(src)
+    root = cache_dir or _os.path.join(_tempfile.gettempdir(), "ppt-design-imgcache")
+    _os.makedirs(root, exist_ok=True)
+    key = _hashlib.md5((src + "|" + tag).encode("utf-8")).hexdigest()[:16]
+    return _os.path.join(root, f"{key}.png")
+
+
+def photo_fill(slide, x, y, w, h, path, anchor="center", cache_dir=None):
+    """박스를 꽉 채우도록 크롭해서 넣는다(object-fit: cover).
+    anchor: center|left|right|top|bottom — 어느 쪽을 살릴지."""
+    from PIL import Image
+    if not path or not _os.path.isfile(str(path)):
+        return picture(slide, x, y, w, h, path=None, caption="사진")
+    dst = _cache_path(path, f"fill{w:.0f}x{h:.0f}{anchor}", cache_dir)
+    if not _os.path.exists(dst) or \
+            _os.path.getmtime(dst) < _os.path.getmtime(str(path)):
+        im = Image.open(str(path)).convert("RGB")
+        iw, ih = im.size
+        target, cur = w / h, iw / ih
+        if cur > target:
+            nw = int(ih * target)
+            x0 = 0 if anchor == "left" else (iw - nw if anchor == "right"
+                                            else (iw - nw) // 2)
+            im = im.crop((x0, 0, x0 + nw, ih))
+        else:
+            nh = int(iw / target)
+            y0 = 0 if anchor == "top" else (ih - nh if anchor == "bottom"
+                                            else (ih - nh) // 2)
+            im = im.crop((0, y0, iw, y0 + nh))
+        im.save(dst)
+    return slide.shapes.add_picture(dst, px(x), px(y), px(w), px(h))
+
+
+def _trim_white(im, thresh=244, margin=0.02):
+    """흰 여백 트림 — 리포트 페이지·스크린샷이 카드 안에서 붕 뜨지 않게
+    콘텐츠 bbox 로 먼저 자른다."""
+    g = im.convert("L")
+    mask = g.point(lambda v: 255 if v < thresh else 0)
+    bbox = mask.getbbox()
+    if not bbox:
+        return im
+    mx, my = int(im.size[0] * margin), int(im.size[1] * margin)
+    return im.crop((max(0, bbox[0] - mx), max(0, bbox[1] - my),
+                    min(im.size[0], bbox[2] + mx),
+                    min(im.size[1], bbox[3] + my)))
+
+
+def shot_card(slide, x, y, w, h, path, pad=12, frame=True, bg="canvas",
+              cache_dir=None, caption=None, trim=True):
+    """앱 스크린샷·리포트 페이지 — 자르지 않고(contain) 카드 안에 담는다.
+    화면 정보가 전체에 퍼져 있어 crop 하면 증거 가치를 잃기 때문이다.
+    trim=True 면 흰 여백을 먼저 잘라 콘텐츠가 카드를 채운다."""
+    from PIL import Image
+    if frame:
+        rect(slide, x - 1, y - 1, w + 2, h + 2, fill=bg, line="hairline",
+             line_w=1.0)
+    if not path or not _os.path.isfile(str(path)):
+        return picture(slide, x, y, w, h, path=None,
+                       caption=caption or "스크린샷")
+    dst = _cache_path(path, f"shot{w:.0f}x{h:.0f}p{pad}t{int(trim)}", cache_dir)
+    if not _os.path.exists(dst) or \
+            _os.path.getmtime(dst) < _os.path.getmtime(str(path)):
+        SS = 2
+        cw, chh = int(w * SS), int(h * SS)
+        canvas = Image.new("RGB", (cw, chh), (255, 255, 255))
+        im = Image.open(str(path)).convert("RGB")
+        if trim:
+            im = _trim_white(im)
+        iw, ih = im.size
+        sc = min((cw - pad * SS * 2) / iw, (chh - pad * SS * 2) / ih)
+        im = im.resize((max(1, int(iw * sc)), max(1, int(ih * sc))),
+                       Image.LANCZOS)
+        canvas.paste(im, ((cw - im.size[0]) // 2, (chh - im.size[1]) // 2))
+        canvas.save(dst)
+    return slide.shapes.add_picture(dst, px(x), px(y), px(w), px(h))
+
+
+def mask_photo(slide, x, y, w, h, path, radius=12, anchor="center",
+               pill=False, cache_dir=None):
+    """라운드(또는 알약) 마스크 사진. radius=px, pill=True면 좌우 반원."""
+    from PIL import Image, ImageDraw
+    if not path or not _os.path.isfile(str(path)):
+        return picture(slide, x, y, w, h, path=None, radius=radius,
+                       caption="사진")
+    r = (min(w, h) / 2) if pill else radius
+    dst = _cache_path(path, f"mask{w:.0f}x{h:.0f}r{r:.0f}{anchor}", cache_dir)
+    if not _os.path.exists(dst) or \
+            _os.path.getmtime(dst) < _os.path.getmtime(str(path)):
+        SS = 2
+        cw, chh = int(w * SS), int(h * SS)
+        im = Image.open(str(path)).convert("RGB")
+        iw, ih = im.size
+        target, cur = cw / chh, iw / ih
+        if cur > target:
+            nw = int(ih * target)
+            x0 = 0 if anchor == "left" else (iw - nw if anchor == "right"
+                                            else (iw - nw) // 2)
+            im = im.crop((x0, 0, x0 + nw, ih))
+        else:
+            nh = int(iw / target)
+            y0 = 0 if anchor == "top" else (ih - nh if anchor == "bottom"
+                                            else (ih - nh) // 2)
+            im = im.crop((0, y0, iw, y0 + nh))
+        im = im.resize((cw, chh), Image.LANCZOS).convert("RGBA")
+        m = Image.new("L", (cw, chh), 0)
+        ImageDraw.Draw(m).rounded_rectangle((0, 0, cw - 1, chh - 1),
+                                           radius=int(r * SS), fill=255)
+        im.putalpha(m)
+        im.save(dst)
+    return slide.shapes.add_picture(dst, px(x), px(y), px(w), px(h))
+
+
+def blend_bg(path, bg_hex="0E0B14", cache_dir=None):
+    """검정 배경 렌더(3D 오브제 등)의 검정을 페이지 배경색으로 치환한 경로 반환.
+    다크 슬라이드에 얹을 때 사각 경계가 보이는 것을 막는다."""
+    from PIL import Image
+    if not path or not _os.path.isfile(str(path)):
+        return None
+    dst = _cache_path(path, f"blend{bg_hex}", cache_dir)
+    if not _os.path.exists(dst) or \
+            _os.path.getmtime(dst) < _os.path.getmtime(str(path)):
+        bg = tuple(int(bg_hex[i:i + 2], 16) for i in (0, 2, 4))
+        im = Image.open(str(path)).convert("RGB")
+        p = im.load()
+        for yy in range(im.size[1]):
+            for xx in range(im.size[0]):
+                r_, g_, b_ = p[xx, yy]
+                if r_ < 26 and g_ < 26 and b_ < 26:
+                    p[xx, yy] = bg
+        im.save(dst)
+    return dst
+
+
+def tag_pill(slide, x, y, label, color="primary", size=13, pad=14, h=30):
+    """테두리 태그. 채운 알약은 '누를 수 있는 버튼'처럼 읽히므로,
+    클릭 대상이 아닌 정보 라벨은 이 스타일을 쓴다."""
+    w = len(label) * size * 0.98 + pad * 2
+    rect(slide, x, y, w, h, fill=None, line=color, line_w=1.2, radius=h / 2)
+    text(slide, x, y, w, h, label, size_px=size, weight="SemiBold",
+         color=color, align="center", valign="middle")
+    return w
+
+
+def dot_label(slide, x, y, label, sub="", color="primary", w=300):
+    """색 점 + 텍스트(+보조) — 태그보다 더 담백한 정보 라벨."""
+    oval(slide, x, y + 7, 8, 8, fill=color)
+    text(slide, x + 18, y, w, 22, label, type_token="title_sm", color="ink")
+    if sub:
+        text(slide, x + 18, y + 24, w, 20, sub, type_token="body_sm",
+             color="muted")
+
+
+def text_runs(slide, x, y, w, h, parts, size_px=16, weight="Regular",
+              align="left", valign="top", line_spacing=None, tracking_px=None):
+    """한 줄 안에서 색·굵기가 바뀌는 텍스트. parts=[(문자열, 색[, 굵기])].
+
+    "말하면 정리돼서 들어가요"처럼 한 줄에서 일부만 강조색을 쓸 때.
+    text()는 단일 run이라 이 표현을 만들 수 없다.
+    """
+    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    tb = slide.shapes.add_textbox(px(x), px(y), px(w), px(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    for m in ('margin_left', 'margin_right', 'margin_top', 'margin_bottom'):
+        setattr(tf, m, 0)
+    tf.vertical_anchor = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE,
+                          "bottom": MSO_ANCHOR.BOTTOM}[valign]
+    p = tf.paragraphs[0]
+    p.alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER,
+                   "right": PP_ALIGN.RIGHT}[align]
+    if line_spacing:
+        p.line_spacing = line_spacing
+    for part in parts:
+        txt, color = part[0], part[1]
+        wt = part[2] if len(part) > 2 else weight
+        r = p.add_run()
+        r.text = txt
+        _apply_run(r, size_px=size_px, weight=wt, color=color,
+                   tracking_px=tracking_px)
+    return tb

@@ -9,7 +9,7 @@
 
 ### `cover(d, title, subtitle="", eyebrow="", brand="", title2=None, title2_color="primary", meta="")`
 표지. `title2`를 주면 2번째 줄을 강조색 ExtraBold로(1번째 줄은 Light).
-- 예: `L.cover(d, title="강점으로 일하는 법", title2="잠재력 발견", subtitle="...", brand="9WAY", meta="문의...")`
+- 예: `L.cover(d, title="강점으로 일하는 법", title2="잠재력 발견", subtitle="...", brand="ACME", meta="문의...")`
 
 ### `section_divider(d, number, title, subtitle="", dark=True)`
 챕터 전환. 큰 번호 + 제목. `number=""`이면 번호 없이 중앙 좌측 제목만.
@@ -30,6 +30,11 @@
 ### `concept(d, term, definition, formula="", example="", eyebrow="Key Concept")`
 핵심 개념: 큰 용어(Black) + 정의 + (공식 박스) + (다크 예시 콜아웃).
 - 예: `L.concept(d, "강점", "재능에 지식·기술이...", formula="재능 × (지식+기술) = 강점", example="...")`
+
+### `concept_wide(d, term, definition, formula="", example="", eyebrow="Key Concept")`
+`concept` 개선판. **개념 정의 장은 이걸 먼저 쓴다.** 용어 크기를 길이에 맞춰 줄이고,
+정의·예시를 공백 기준으로 다시 줄바꿈하며, 예시 상자 높이를 글 양에 맞춘다.
+- 예: `L.concept_wide(d, "강점", "재능에 지식·기술이 더해져 생산적으로 발휘되는 능력", formula="재능 × (지식 + 기술) = 강점", example="‘연결’ 재능 + 커뮤니케이션 → ‘연결’ 강점")`
 
 ### `question(d, question_text, sub="")`
 풀코랄 빅 퀘스천. `\n`으로 줄나눔. 청중 환기용(푸터 없음).
@@ -65,7 +70,7 @@
 
 ### `timeline(d, title, nodes, eyebrow="Timeline")`
 가로 타임라인(위/아래 교차). `nodes`: `[(라벨, 제목, 보조)]`. 마지막 노드는 코랄 강조.
-- 예: `L.timeline(d, "역사", [("1998","긍정심리학","셀리그만"), ("2024","9WAY","")])`
+- 예: `L.timeline(d, "역사", [("1998","긍정심리학","셀리그만"), ("2024","새 도구","")])`
 
 ## 프레임워크 · 가이드
 
@@ -118,7 +123,7 @@ Thin weight 매거진/에세이. `headline`(Thin) + `columns`(본문 1~2개 리�
 ### `index_list(d, title, items, eyebrow="", sub="")`
 좌측 큰 타이틀 + 우측 번호 디렉터리(제목 + URL/보조). 목차·도구 목록·준비물.
 `items`: `[(제목, URL/보조[, 색])]` (권장 3~6). 제목에 `\n` 사용 가능.
-- 예: `L.index_list(d, "시작 전,\n준비", [("Claude 설치","https://..."), ("VUILD 가입","https://...")], sub="총 6단계")`
+- 예: `L.index_list(d, "시작 전,\n준비", [("Claude 설치","https://..."), ("계정 만들기","https://...")], sub="총 6단계")`
 
 ### `feature_cards(d, title, cards, cols=None, tip="", tip_label="TIP", eyebrow="")`
 N-up 카드(3~6, `three_up` 일반화). `cards`: `[(제목, 본문)]` 또는 `[(배지, 제목, 본문[, 색])]`
@@ -194,8 +199,57 @@ N-up 카드(3~6, `three_up` 일반화). `cards`: `[(제목, 본문)]` 또는 `[(
 
 ## 마무리
 
-### `closing(d, title, sub="", contact="")`
-코랄 CTA 클로징 밴드. `contact`를 주면 크림 버튼에 표시.
+### `closing(d, title, sub="", contact="", eyebrow="", action="")`
+어두운 배경 가운데 정렬 마무리. `contact`만 주면 버튼에 연락처를, `action`(예: "문의하기")을 주면 버튼엔 action, 그 아래 contact를 작게 쓴다. `eyebrow`는 제목 위 작은 글.
+
+### `closing_qr(d, title, sub="", offers=None, qr=None, contacts=None, eyebrow="GET STARTED", qr_caption="", qr_url="", deco=None, offer_label="", dark=True)`
+마무리 3열: 왼쪽 오퍼 카드(`offers=[(제목, 설명)]`) + 가운데 QR 그림(`qr`=이미지 경로) + 아래 연락처(`contacts=[(라벨, 값)]`, 최대 3).
+`deco`에 검정 배경 렌더 이미지를 주면 검정을 배경색으로 바꿔 오른쪽에 얹는다.
+- 예: `L.closing_qr(d, "지금 시작해 보세요", sub="설치는 두 줄", offers=[("무료 설치","GitHub")], qr="render/qr.png", qr_caption="GitHub", contacts=[("메일","hello@acme.com")])`
+
+### `big_message(d, lines, eyebrow="", sub="", note="", dark=True, size=None)`
+큰 문장 2~3줄 임팩트 장. `poster`보다 긴 문장에 맞는다. `lines`는 줄마다 `[(문자열, 색|None), ...]` — 한 줄 안에서 일부만 강조색.
+- 예: `L.big_message(d, [[("말로 하면", None)], [("설명을 ", None), ("안 줄여요", "primary")]], sub="...")`
+
+## 사진 · 실화면 (사진·스크린샷이 있을 때)
+
+`image`·`photos`·`shots`에 파일 경로를 준다. 없거나 경로가 틀리면 자리 표시(🖼)가 대신 들어가 레이아웃이 깨지지 않는다.
+사진은 박스를 꽉 채우게 잘리고(`anchor`로 살릴 쪽 지정: center|left|right|top|bottom), 스크린샷은 자르지 않고 카드 안에 온전히 들어간다(흰 여백은 먼저 잘라 냄).
+잘라 낸 그림은 임시 폴더(`ppt-design-imgcache`)에 둔다. 작업 폴더를 어지럽히지 않는다.
+
+### `cover_photo(d, title_lines, eyebrow="", brand="", sub="", meta="", photos=None, accent_from=1, pill=True, dark=False)`
+표지: 왼쪽 큰 헤드라인(줄 리스트) + 오른쪽 아래 사진 조각 최대 3장(알약 모양). `accent_from` 번째 줄부터 강조색.
+- 예: `L.cover_photo(d, ["말하면 정리돼서", "입력창에 들어가요"], eyebrow="GUIDE", brand="ACME", sub="...", photos=["a.jpg","b.jpg","c.jpg"])`
+
+### `photo_hero(d, title_lines, body="", note="", image=None, anchor="right", ratio=0.5, dark=False, brand="", eyebrow="")`
+한쪽(기본 오른쪽 절반)이 사진, 반대쪽에 헤드라인·본문·강조 한 줄(`note`).
+
+### `split_color_photo(d, title_lines, body="", items=None, footer_note="", image=None, eyebrow="", color="primary", ratio=0.5, anchor="center")`
+왼쪽 색 블록(제목·본문·항목 `items=[(라벨, 설명)]`) + 오른쪽 사진. 워크숍·프로그램 소개용.
+
+### `stats_photo(d, title, stats, image=None, eyebrow="", note="", anchor="center")`
+왼쪽 수치 카드 3장 세로(`stats=[(숫자, 라벨, 설명, 출처)]`) + 오른쪽 사진 + 아래 한 줄 해설.
+
+### `shots_row(d, title, shots, eyebrow="", sub="", desc="", note="", note_label="", note_sub="", bg=None)`
+스크린샷 3장 가로 + 번호 캡션(`shots=[(경로, 캡션)]`). 아래 `note` 밴드와 오른쪽 `note_label`(TIP 등).
+
+### `screens_showcase(d, title, shots, eyebrow="", desc="", note="", note2="", bg="surface_soft", on_dark=False)`
+제품 실화면 2장(큰 화면 + 작은 화면). `shots=[(경로, 캡션)]`.
+
+### `profile_photo(d, name, name_en="", role="", career=None, activity=None, image=None, eyebrow="", title="대표 강사 프로필", note="")`
+인물 프로필: 왼쪽 사진 + 오른쪽 2열 이력(`career`·`activity` 문자열 리스트) + 강조 한 줄.
+
+### `logo_sheet(d, title, image=None, eyebrow="", sub="", names=None, cols=6)`
+도입처 로고: 로고 모음 그림(`image`)을 크게. 그림이 없으면 `names`를 글자 칸으로 늘어놓는다.
+
+## 정리 · 후기 · 지도
+
+### `quote_grid(d, title, quotes, eyebrow="", desc="")`
+후기 2×2. `quotes=[(본문, 화자)]` 최대 4.
+
+### `radial_map(d, title, center, center_sub="", groups=None, desc="", eyebrow="", radius=178, node=96, cx=420, cy=430, foot_note="")`
+방사형 개념 지도: 가운데 원 + 둘레 노드 + 오른쪽 묶음 카드. `groups=[(묶음 이름, 영문, 색 토큰, [(노드, 영문), ...])]`.
+- 예: `L.radial_map(d, "생각의 지도", "AI", groups=[("만들기","Make","primary",[("글",""),("그림","")]), ("찾기","Find","accent_teal",[("검색","")])])`
 
 ---
 

@@ -1,167 +1,148 @@
 # PPT Design
 
-**디자인 시스템 기반 PPTX 덱 생성기** — Claude Code / Claude Agent 스킬.
-폰트와 색(테마)을 정의하면, 같은 콘텐츠 코드가 그 스타일의 수정 가능한 `.pptx`로 나온다.
-제안서·보고서·강의·가이드북 등 **덱 유형**별 구성을 지원한다.
+**디자인 시스템으로 PPT를 만드는 Claude Code 스킬.**
+글꼴과 색(테마)을 정하면, 같은 내용이 그 스타일의 고칠 수 있는 `.pptx`로 나와요.
+제안서 · 보고서 · 강의 · 가이드북 같은 **덱 유형**마다 구성을 다르게 짜 줘요.
 
-> 한국어 슬라이드에 최적화(가독성 보정 내장). 네이티브 표·차트(데이터 편집 가능).
+> 한국어 슬라이드에 맞춰 뒀어요. 한글은 단어 단위로 줄을 바꾸고, 영문 글꼴 테마에서도 한글은 Pretendard로 그려요.
+> 표와 차트는 파워포인트에서 바로 고칠 수 있는 진짜 표·차트로 들어가요.
 
 ---
 
-## ⚡ 5분 시작 (신규 사용자)
+## 설치
 
-### 1) 내 덱 프리셋 고르기 (~2분)
-먼저 **어떤 스타일의 덱을 만들지** 정합니다. 가장 쉬운 방법은
-[getdesign.md/design-md](https://getdesign.md/design-md)에서 원하는 사이트를 고르고,
-그 사이트의 `DESIGN.md`를 내 덱 프리셋으로 쓰는 것입니다.
+### 1) Claude Code에서 한 줄 (Claude Code 2.1.275 이상)
 
-예:
-- 깔끔한 SaaS 제안서: Linear, Attio, Stripe 계열 스타일
-- 차분한 보고서: Notion, Apple 계열 스타일
-- 강한 다크 톤: Vercel, Raycast 계열 스타일
-
-가져온 `DESIGN.md`는 작업 프로젝트 루트나 Claude가 읽을 수 있는 위치에 둡니다.
-
-```text
-my-project/
-  DESIGN.md
+```
+/plugin install ppt-design --marketplace daniel-kim-9way/ppt-design
 ```
 
-Claude에게는 이렇게 말하면 됩니다:
+버전이 낮으면 두 줄로 해요.
 
-```text
-DESIGN.md를 이 프로젝트의 덱 프리셋으로 사용해줘.
-앞으로 만드는 PPT는 이 스타일을 기준으로 만들어줘.
+```
+/plugin marketplace add daniel-kim-9way/ppt-design
+/plugin install ppt-design@ppt-design
 ```
 
-스타일을 아직 고르지 않았다면 기본 `cream-coral` 테마로 시작할 수 있습니다.
+설치가 끝나면 Claude Code를 다시 열거나 `/reload-plugins`를 치세요. 버전은 터미널에서 `claude --version`으로 봐요.
 
-### 2) 설치 (한 번만, ~2분)
-```bash
-# (1) 이 폴더를 스킬 디렉터리에 배치
-#     Claude Code:  ~/.claude/skills/ppt-design/
-# (2) 의존성 설치
+### 2) 파이썬 라이브러리 한 번
+
+```
 pip install python-pptx
-# (3) 폰트 설치 — 기본은 Pretendard (https://github.com/orioncactus/pretendard)
-#     ※ 없어도 동작하지만 시스템 폰트로 대체되어 글꼴이 달라짐
-```
-> 사용자 전역 스킬이라 **한 번 넣으면 모든 프로젝트에서 자동 인식**됩니다.
-
-### 3) 첫 덱 만들기 (~1분)
-Claude에게 그냥 말하세요:
-```
-DESIGN.md 스타일로 이 웹사이트를 분석해서 제안서 덱 만들어줘:
-https://example.com
-```
-Claude가 알아서: **유형·테마 확인 → 슬라이드 기획 → 빌드 → 렌더 검증 → 전달**.
-결과물은 작업 폴더의 `OUTPUT/<프로젝트>/<파일>.pptx` 에 생깁니다.
-
-또는 원고/메모를 바로 붙여넣어도 됩니다:
-
-```text
-DESIGN.md 스타일로 강의안 만들어줘.
-내용은 아래와 같아: ...
 ```
 
-### 4) 내 스타일 지정 방법
-원하는 만큼만 주면 됩니다:
+Windows에서 `pip`이 없다고 나오면 `py -m pip install python-pptx`를 치세요. 처음 덱을 만들 때 Claude에게 «설치해 줘»라고 해도 돼요.
+
+### 3) 글꼴 (권장)
+
+기본 테마는 [Pretendard](https://github.com/orioncactus/pretendard)를 써요. 없어도 만들어지지만, 다른 글꼴로 대신 보여요.
+
+<details>
+<summary>플러그인 없이 개인 스킬로 넣기</summary>
+
+```
+git clone https://github.com/daniel-kim-9way/ppt-design
+```
+받은 폴더의 `plugins/ppt-design/skills/ppt-design`를 `~/.claude/skills/ppt-design`로 복사해요.
+</details>
+
+---
+
+## 첫 덱 만들기
+
+Claude Code에 그냥 말하세요.
+
+```
+회의 잘하는 법을 주제로 4장짜리 강의안 PPT 만들어 줘
+```
+
+Claude가 유형·테마 확인 → 슬라이드 기획 → 빌드 → 그림으로 뽑아 확인 → 전달까지 해요.
+결과물은 **작업 폴더의 `OUTPUT/ppt-design/<프로젝트>/`**에 생겨요(`build.py`도 같이 있어서 고쳐 다시 만들 수 있어요).
+
+### 내 스타일로 만들기: DESIGN.md
+
+잘 알려진 사이트의 디자인(색·글꼴·여백)을 정리한 `DESIGN.md`를 덱 스타일로 쓸 수 있어요.
+
+- 무료 모음: [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) — `design-md/<사이트>/DESIGN.md`를 받아요.
+- 더 많은 목록: [getdesign.md](https://getdesign.md/design-md) — 일부는 유료(Catalog Pass)이거나 로그인이 필요해요.
+
+받은 `DESIGN.md`를 작업 폴더에 두고 이렇게 말해요.
+
+```
+DESIGN.md를 이 프로젝트의 덱 스타일로 써 줘. 이 내용으로 제안서 만들어 줘: ...
+```
+
+### 스타일을 정하는 다른 방법
 
 | 이렇게 말하면 | 결과 |
 |---|---|
-| "`DESIGN.md` 스타일로" | getdesign.md에서 가져온 사이트 스타일 |
-| (그냥 만들어줘) | 기본 **cream-coral** 테마 |
-| "**slate-blue** 테마로" | 프리셋 그대로 |
-| "주색 **#2563EB**, 폰트 **Pretendard**로" | 색·폰트 시드 → 전체 팔레트 자동 생성 |
-| "이 **디자인 시스템 명세** 붙여넣을게 →" + (MD 첨부) | 명세의 색·폰트로 테마 변환 |
+| (그냥 만들어 줘) | 기본 **cream-coral** 테마 |
+| "**slate-blue** 테마로" | 프리셋 그대로 (`cream-coral` · `slate-blue` · `ink-mono` · `voltagent-dark`) |
+| "주색 **#2563EB**, 글꼴 **Pretendard**로" | 색·글꼴 몇 개로 전체 팔레트 자동 생성 |
+| "`DESIGN.md` 스타일로" | 명세의 색·글꼴로 테마 변환 |
 
-### 5) 수정
-"3번 슬라이드 문구 바꿔줘", "다크로 바꿔줘", "차트 추가" →
-`OUTPUT/<프로젝트>/build.py` 한 줄 고쳐 재실행하면 즉시 반영됩니다.
+### 고치기
 
-### 고를 수 있는 것
-- **덱 유형**: `제안서` · `보고서` · `강의` · `가이드북` (유형별 구성·톤 자동)
-- **테마**: `cream-coral`(기본) · `slate-blue` · `ink-mono` · `voltagent-dark`(다크) · 커스텀
-
-### 자주 막히는 곳
-- 글꼴이 이상해요 → 테마 폰트가 PC에 **미설치**(시스템 폰트 대체). 폰트 설치하면 해결.
-- 다른 PC에서 깨져요 → 그 PC에도 **폰트 설치** 필요(PPTX는 폰트를 품지 못함).
-- 결과가 안 보여요 → `현재 작업 폴더`의 `OUTPUT/` 아래를 확인하세요.
+"3번 슬라이드 문구 바꿔 줘", "다크로 바꿔 줘", "차트 하나 넣어 줘"라고 하면
+`OUTPUT/ppt-design/<프로젝트>/build.py`를 고쳐 다시 만들어요.
 
 ---
 
-## 특징
-- 🎨 **테마 교체**: 프리셋(`cream-coral`·`slate-blue`·`ink-mono`·`voltagent-dark`) 또는
-  폰트+시드색 몇 개로 전체 팔레트 자동 생성(`theme.from_seeds`). 라이트/다크 모두 지원.
-- 📥 **디자인 명세 → 테마**: getdesign.md 형식의 디자인 시스템 마크다운을 붙여넣으면
-  그 색·폰트로 테마를 만든다(`reference/DESIGN-MD.md`).
-- 🧩 **레이아웃 카탈로그 45종**: 표지/통계/3·N-up/비교표/프로세스/타임라인/매트릭스/
-  Do-Dont/인용/활동지/포스터/에디토리얼/차트/클로징 +
-  **목차·KPI·가격표·팀·로고월·로드맵·SWOT·진행바·VS 대비·콜아웃**(제안서·보고서 공통) +
-  **스크린샷·단계 안내(가이드북)** `split_image`·`steps_image`·`index_list`·
-  `feature_cards`·`check_cards`·`image_full`·`image_grid`(전부 파라미터화).
-- 📑 **덱 유형 4종**: proposal / report / lecture / guidebook — 유형별 추천 흐름.
-- ✏️ **수정 가능 산출물**: 모든 텍스트·표·차트가 네이티브 PPTX 객체.
-- 🔤 **폰트 고정/교체**: 기본 Pretendard, 테마로 임의 폰트.
+## 들어 있는 것
 
-## 설치
-```bash
-# 1) 스킬 폴더를 사용자 스킬 디렉터리에 배치
-#    Claude Code:  ~/.claude/skills/ppt-design/
-# 2) 의존성
-pip install python-pptx
-# 3) 테마 폰트 설치 (기본: Pretendard). 미설치 시 시스템 폰트로 대체.
-```
+- 🎨 **테마 교체**: 프리셋 4개 또는 글꼴+색 몇 개로 팔레트 자동 생성(`theme.from_seeds`). 라이트·다크 둘 다.
+- 📥 **DESIGN.md → 테마**: 명세의 색·글꼴로 테마를 만들어요(`reference/DESIGN-MD.md`).
+- 🧩 **레이아웃 58종**: 표지 · 통계 · 카드 · 비교표 · 프로세스 · 타임라인 · 매트릭스 · Do/Don't · 인용 · 활동지 · 포스터 · 차트 · 마무리 · 목차 · KPI · 가격표 · 팀 · 로드맵 · SWOT · 스크린샷 안내 ·
+  **사진 레이아웃**(사진 표지 · 사진 반쪽 · 사진+수치 · 스크린샷 3장/2장 · 인물 프로필 · 로고 모음) · 후기 2×2 · 방사형 지도 · QR 마무리 · 큰 문장. 목록은 `reference/LAYOUTS.md`.
+- 📑 **덱 유형 4가지**: proposal · report · lecture · guidebook — 유형마다 추천 흐름.
+- ✏️ **고칠 수 있는 결과물**: 글·표·차트가 전부 파워포인트 개체.
+- 🇰🇷 **한글**: 단어 단위 줄바꿈, 영문 글꼴 테마에서도 한글은 Pretendard.
 
-## 빠른 사용 (스킬)
-처음에는 [getdesign.md/design-md](https://getdesign.md/design-md)에서 원하는 사이트의
-`DESIGN.md`를 가져와 덱 프리셋으로 정하는 것을 권장합니다.
+## 코드로 바로 쓰기
 
-Claude에게 자연어로:
-- "`DESIGN.md` 스타일로 이 웹사이트를 분석해서 **제안서** 만들어줘 — https://example.com"
-- "이 내용으로 **제안서** 만들어줘 — 우리 브랜드 색은 #2563EB, 폰트는 Pretendard"
-- "**강의안** 만들어줘" (기본 cream-coral 테마)
-- "이 보고서를 **slate-blue** 테마로"
-
-Claude가 ① 유형·테마 확인 → ② (커스텀이면) 테마 생성 → ③ 슬라이드 기획 →
-④ 빌드 스크립트 작성 → ⑤ 실행·렌더 검증 → ⑥ `OUTPUT/<프로젝트>/`에 전달.
-
-## 직접 사용 (코드)
 ```python
-import os, sys
-sys.path.insert(0, os.path.join(os.path.expanduser("~"),
-                                ".claude", "skills", "ppt-design", "deck"))
+import sys
+sys.path.insert(0, "plugins/ppt-design/skills/ppt-design/deck")   # 저장소에서 실행할 때
 from builder import Deck
 import layouts as L
 
 d = Deck(theme="slate-blue", kind="proposal", brand="ACME")
 L.cover(d, title="제안서", title2="핵심 가치", subtitle="부제", brand="ACME")
-L.stat_cards(d, "왜 지금인가", [("3x","속도","...")])
-L.process(d, "도입 절차", [("진단","..."),("설계","..."),("적용","...")])
+L.stat_cards(d, "왜 지금인가", [("3x", "속도", "...")])
+L.process(d, "도입 절차", [("진단", "..."), ("설계", "..."), ("적용", "...")])
 L.closing(d, "함께 시작하시죠", contact="hello@acme.com")
 print(d.save_project("acme-proposal", "ACME.pptx"))
-# → ./OUTPUT/acme-proposal/ACME.pptx
+# → ./OUTPUT/ppt-design/acme-proposal/ACME.pptx
 ```
 
-## 커스텀 테마
+예제: `python examples/example_lecture.py` (저장소 루트에서). 결과물 위치를 바꾸려면 환경변수 `PPT_DESIGN_OUTPUT`에 폴더를 줘요.
+
+### 내 테마
+
 ```python
 import theme as th
 t = th.from_seeds(font="Pretendard", primary="#2563EB", canvas="#FFFFFF",
                   ink="#0F172A", dark="#0B1220", name="acme")
-th.save(t, "OUTPUT/acme/theme.json")
-# Deck(theme="OUTPUT/acme/theme.json", ...)
+th.save(t, "OUTPUT/ppt-design/acme/theme.json")
+# Deck(theme="OUTPUT/ppt-design/acme/theme.json", ...)
 ```
-자세한 건 `reference/THEMES.md`.
+글꼴이 Inter처럼 한글이 없는 영문 글꼴이면 `ko="Pretendard"`를 같이 줘요. 자세한 건 `reference/THEMES.md`.
 
 ## 문서
-- `SKILL.md` — 에이전트 워크플로
-- `reference/LAYOUTS.md` — 레이아웃 카탈로그
-- `reference/THEMES.md` — 테마 스키마·생성
-- `reference/DECK-TYPES.md` — 유형별 구성
+
+- `plugins/ppt-design/skills/ppt-design/SKILL.md` — Claude가 따르는 작업 순서
+- `.../reference/LAYOUTS.md` — 레이아웃 58종
+- `.../reference/THEMES.md` — 테마 구조·만들기
+- `.../reference/DESIGN-MD.md` — DESIGN.md를 테마로 바꾸는 법
+- `.../reference/DECK-TYPES.md` — 유형별 구성
 
 ## 한계
-- python-pptx는 폰트를 파일에 임베드하지 못함 → 보는 PC에 폰트 설치 필요.
-- 16:9(1280×720) 전용. 밝은 캔버스 가정(다크모드 테마는 별도 정의 필요).
-- 렌더 검증엔 PowerPoint(Windows) 또는 LibreOffice 필요(생성 자체는 불필요).
+
+- python-pptx는 글꼴을 파일에 넣지 못해요. 보는 PC에도 같은 글꼴이 있어야 똑같이 보여요.
+- 16:9(1280×720) 전용이에요.
+- 그림으로 뽑아 확인하려면 PowerPoint(Windows) 또는 LibreOffice가 있어야 해요. 만드는 데는 필요 없어요.
 
 ## License
-MIT — see `LICENSE`.
+
+MIT — `LICENSE`를 보세요.

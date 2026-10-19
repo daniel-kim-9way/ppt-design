@@ -60,15 +60,19 @@ WEIGHT_MAP = {}      # 굵기명 -> (폰트 패밀리, bold flag)
 FONT_BODY = "Pretendard"
 FONT_DISPLAY = "Pretendard"
 FONT_MONO = "Consolas"
+FONT_KO = "Pretendard"   # 한글(ea) 글꼴. 테마 fonts.ko 가 없으면 본문 글꼴과 같다
+KO_WEIGHT_MAP = {}   # 굵기명 -> 한글 글꼴 패밀리
 MODE = "light"       # "light" | "dark"
 CARD_HAIRLINE = False  # True면 surface_card 카드가 자동으로 hairline 보더를 가짐
 
 
 def apply(palette, fonts, mode="light", card_hairline=None):
-    """테마 적용. palette: 슬롯->hex dict, fonts: {body, display?, mono?, weights?}.
+    """테마 적용. palette: 슬롯->hex dict,
+    fonts: {body, display?, mono?, weights?, ko?, ko_weights?}.
+    ko: 한글 글꼴. body 가 Inter처럼 한글이 없는 글꼴일 때 "Pretendard" 등을 준다.
     mode: 'light'|'dark'. card_hairline: None이면 dark일 때 자동 True."""
     global COLORS, WEIGHT_MAP, FONT_BODY, FONT_DISPLAY, FONT_MONO
-    global MODE, CARD_HAIRLINE
+    global FONT_KO, KO_WEIGHT_MAP, MODE, CARD_HAIRLINE
     MODE = mode
     CARD_HAIRLINE = (mode == "dark") if card_hairline is None else card_hairline
     missing = [s for s in COLOR_SLOTS if s not in palette]
@@ -85,6 +89,18 @@ def apply(palette, fonts, mode="light", card_hairline=None):
             WEIGHT_MAP[w] = (wfam[w], False)
         else:                              # 없으면 본문 폰트 + bold 근사
             WEIGHT_MAP[w] = (FONT_BODY, w in HEAVY)
+    # 한글 글꼴: ko 가 없으면 영문과 같은 패밀리(예전 동작). 있으면 한글만 따로.
+    # 영문이 bold 근사로 굵기를 내면 한글도 기본 패밀리 + bold 로 맞춘다.
+    ko = fonts.get("ko")
+    kw = fonts.get("ko_weights", {})
+    FONT_KO = ko or FONT_BODY
+    KO_WEIGHT_MAP = {}
+    for w in WEIGHTS:
+        fam, bold = WEIGHT_MAP[w]
+        if not ko:
+            KO_WEIGHT_MAP[w] = fam
+        else:
+            KO_WEIGHT_MAP[w] = FONT_KO if bold else kw.get(w, FONT_KO)
 
 
 # 기본 테마 (크림/코랄 + Pretendard) — 테마 미설정 시에도 동작하도록 import 시 적용

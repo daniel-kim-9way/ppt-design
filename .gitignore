@@ -3,3 +3,4 @@ __pycache__/
 OUTPUT/
 *.pptx
 render/
+_imgcache/

@@ -7,7 +7,7 @@
 사용:
     from builder import Deck
     import layouts as L
-    d = Deck(brand="9WAY · 미래인재연구소")
+    d = Deck(brand="ACME · 제안서")
     L.cover(d, title="...", subtitle="...")
     ...
     d.save("out.pptx")
@@ -16,7 +16,9 @@ import tokens as T
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from helpers import (px, pt, rgb, rect, oval, text, bullets, line_div, vline,
-                     diag, spike_mark, add_table, picture, _apply_run)
+                     diag, spike_mark, add_table, picture, _apply_run,
+                     set_typefaces, photo_fill, shot_card, mask_photo,
+                     blend_bg, tag_pill, dot_label, text_runs)
 
 LX = 80
 CW = T.SLIDE_W_PX - LX * 2
@@ -26,6 +28,19 @@ ACCENTS = ["primary", "accent_teal", "accent_amber"]
 
 def _accent(i, color=None):
     return color if color else ACCENTS[i % len(ACCENTS)]
+
+
+def _accent_on_dark(color="primary"):
+    """어두운 배경 위 강조색. 강조색이 배경과 너무 비슷하면(ink-mono처럼 강조색이
+    검정일 때) 밝은 글자색(on_dark)으로 바꿔 글자가 사라지지 않게 한다."""
+    def luma(h):
+        h = str(h).lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    c, bg = T.COLORS.get(color), T.COLORS.get("surface_dark")
+    if c and bg and abs(luma(c) - luma(bg)) < 0.25:
+        return "on_dark"
+    return color
 
 
 def _header(slide, eyebrow, title, title_token="display_md",
@@ -84,7 +99,8 @@ def section_divider(deck, number, title, subtitle="", dark=True):
     sc = "on_dark_soft" if dark else "muted"
     if number:
         text(s, LX, 150, 600, 300, str(number), type_token="display_xl",
-             color="primary", weight="Black", size_px=240)
+             color=_accent_on_dark() if dark else "primary", weight="Black",
+             size_px=240)
         tx, ty = 560, 300
     else:
         tx, ty = LX, 320
@@ -599,6 +615,7 @@ def chart(deck, title, categories, series, kind="column", eyebrow="",
                             data)
     ch = gf.chart
     ch.font.name = T.FONT_BODY
+    set_typefaces(ch.font._rPr, T.FONT_BODY, T.FONT_KO)   # 한글 축 라벨
     ch.font.size = pt(20)
     ch.font.color.rgb = rgb("muted")
     palette = ["primary", "accent_teal", "accent_amber", "surface_dark"]
@@ -843,11 +860,12 @@ def closing(deck, title, sub="", contact="", eyebrow="", action=""):
     """풀블리드 다크 CTA 클로징 — 중앙 정렬, 슬림 버튼. 모든 테마에서 프리미엄.
     action: 버튼 라벨(예: '문의하기'). 주면 버튼=action, 그 아래 contact를 작게 표기."""
     s = deck.add("surface_dark")
+    acc = _accent_on_dark()             # 강조색이 어두운 배경에 묻히면 밝은 색으로
     # 상단 짧은 액센트
-    rect(s, SW / 2 - 24, 196, 48, 4, fill="primary", radius=2)
+    rect(s, SW / 2 - 24, 196, 48, 4, fill=acc, radius=2)
     if eyebrow:
         text(s, LX, 220, CW, 22, eyebrow.upper(), type_token="caption_upper",
-             color="primary", align="center")
+             color=acc, align="center")
     text(s, LX, 262, CW, 100, title, type_token="display_lg",
          color="on_dark", align="center", weight="Light")
     y = 372
@@ -861,9 +879,10 @@ def closing(deck, title, sub="", contact="", eyebrow="", action=""):
         label = action or contact
         bw = max(220, 64 + len(label) * 13)
         bx = SW / 2 - bw / 2
-        rect(s, bx, y, bw, 54, fill="primary", radius=8)
+        rect(s, bx, y, bw, 54, fill=acc, radius=8)
         text(s, bx, y, bw, 54, label, type_token="title_sm",
-             color="on_primary", align="center", valign="middle")
+             color="on_primary" if acc == "primary" else "surface_dark",
+             align="center", valign="middle")
         if action and contact:
             text(s, LX, y + 66, CW, 24, contact, type_token="body_md",
                  color="on_dark_soft", align="center", size_px=15)
@@ -1055,7 +1074,8 @@ def callout(deck, headline, body="", eyebrow="", tone="primary", icon="!"):
     if body:
         text(s, LX, 502, 960, 90, body, type_token="title_md", color=soft,
              weight="Light", line_spacing=1.5)
-    deck.footer(s, dark=True)
+    # 색 배경 위에서는 다크용 회색이 안 보이므로 글자색(on_primary)으로
+    deck.footer(s, dark=True, color=None if dark else soft)
     return s
 
 
@@ -1231,5 +1251,606 @@ def image_grid(deck, title, items, eyebrow="", cols=None):
         if cap:
             text(s, x, y + ch + 6, cw, 24, cap, type_token="body_sm",
                  color="muted", align="center")
+    deck.footer(s)
+    return s
+
+
+# ===========================================================================
+# 사진 · 실화면 레이아웃 — 서비스 소개 · 제안서 · 강의용
+#
+# 글자 크기와 간격은 A4 가로 문서(842pt)에서 쓰는 크기를 1280px 캔버스로
+# 옮긴 값(× 1.52)이다. 아래 상수만 쓰고 임의 크기를 쓰지 않는다.
+#   헤드라인 50 · 표지 73 · 초대형 91 · 수치 52 · 카드제목 25 · 리드 23
+#   카드본문 17 · 리스트 15 · eyebrow 16 · 캡션·출처·푸터 12.5
+#   좌여백 LX=82(폭 6.4%) · 3단 카드 폭 352 · 피치 381 · 푸터 y=681
+# weight 는 ExtraBold 가 최대(Black 은 쓰지 않는다).
+# ===========================================================================
+PH_TITLE = 50          # 페이지 헤드라인
+PH_COVER = 57          # 표지 헤드라인 (1280 캔버스에서 2줄 유지)
+PH_HUGE = 76           # 초대형 메시지 — 91은 15자 줄에서 넘친다
+PH_STAT = 52           # 수치
+PH_CARD_T = 25         # 카드 제목
+PH_LEAD = 23           # 리드 본문
+PH_BODY = 17           # 카드 본문
+PH_LIST = 15           # 리스트 본문
+PH_EYE = 16            # eyebrow
+PH_CAP = 12.5          # 캡션 · 출처 · 푸터
+CARD_W, CARD_PITCH = 352, 381
+
+
+def _deck_cache(deck):
+    """사진 레이아웃이 만든 파생 그림을 두는 폴더(기본: 임시 폴더)."""
+    import os
+    import tempfile
+    return getattr(deck, "img_cache", None) or os.path.join(
+        tempfile.gettempdir(), "ppt-design-imgcache")
+
+
+def _eyebrow(s, label, y=52, color="primary"):
+    if label:
+        text(s, LX, y, 600, 22, label.upper(), size_px=PH_EYE, weight="Bold",
+             color=color, tracking_px=2.4)
+
+
+def _est_text_w(txt, size):
+    """한글=size, 라틴·숫자·문장부호=0.62size, 공백=0.32size 근사 폭(px)."""
+    w = 0.0
+    for ch in str(txt):
+        if ch == " ":
+            w += 0.32 * size
+        elif ord(ch) < 0x2000:
+            w += 0.62 * size
+        else:
+            w += 1.0 * size
+    return w
+
+
+def _fit_lines(lines, width, size):
+    """박스 폭을 넘는 줄을 공백 경계에서 자동 분할.
+    "역\\n할" 같은 고아 글자 줄바꿈 방지 — 워드랩에 맡기지 않는다."""
+    out = []
+    for ln in lines:
+        if not isinstance(ln, str) or _est_text_w(ln, size) <= width:
+            out.append(ln)
+            continue
+        rest = ln
+        while _est_text_w(rest, size) > width:
+            cands = [i for i, c in enumerate(rest) if c == " "]
+            if not cands:
+                break
+            best = None                     # width 안에 드는 가장 뒤쪽 공백
+            for i in cands:
+                if _est_text_w(rest[:i], size) <= width:
+                    best = i
+            if best is None:
+                best = cands[0]
+            out.append(rest[:best].rstrip())
+            rest = rest[best + 1:].lstrip()
+        if rest:
+            out.append(rest)
+    return out
+
+
+def _ptitle(s, title, y=78, color="ink", width=680, size=PH_TITLE):
+    """페이지 헤드라인 — 문자열(\\n 허용) 또는 줄 리스트. 폭 초과 줄 자동 분할."""
+    lines = title if isinstance(title, (list, tuple)) else str(title).split("\n")
+    lines = _fit_lines(list(lines), width, size)
+    step = int(size * 1.26)          # 헤드라인 줄간격 1.20 + 글리프 여유
+    for ln in lines:
+        text(s, LX, y, width + 40, step + 6, ln, size_px=size,
+             weight="ExtraBold", color=color, line_spacing=1.2)
+        y += step
+    return y
+
+
+def _pdesc(s, desc, y=84, x=790, w=408, color="muted"):
+    if desc:
+        text(s, x, y, w, 120, desc, size_px=PH_BODY, weight="Regular",
+             color=color, line_spacing=1.7)
+
+
+def cover_photo(deck, title_lines, eyebrow="", brand="", sub="", meta="",
+                photos=None, accent_from=1, pill=True, dark=False):
+    """표지 — 좌측 큰 헤드라인 + 우측 아래 사진 조각(최대 3장, 알약 모양).
+    title_lines: 줄 리스트. 줄 대신 [(문자열, 색|None), ...]을 주면 한 줄 안 부분 강조.
+    accent_from 번째 줄부터 강조색. 기본은 밝은 배경(dark=False)."""
+    s = deck.add("surface_dark" if dark else "surface_soft")
+    ink = "on_dark" if dark else "ink"
+    mut = "on_dark_soft" if dark else "muted"
+    if brand:
+        text(s, LX, 44, 400, 34, brand, size_px=26, weight="ExtraBold",
+             color=ink)
+    if eyebrow:
+        text(s, LX, 76, 620, 20, eyebrow.upper(), size_px=13, weight="Bold",
+             color="primary", tracking_px=2.4)
+    if meta:
+        text(s, SW - LX - 460, 48, 460, 22, meta, size_px=PH_CAP,
+             weight="Medium", color=mut, align="right")
+    # 헤드라인이 전폭을 쓰도록 사진은 하단 우측에 둔다.
+    for i, p in enumerate((photos or [])[:3]):
+        mask_photo(s, 830 + i * 124, 440, 112, 208, p, pill=pill,
+                   cache_dir=_deck_cache(deck))
+    y = 196
+    for i, ln in enumerate(title_lines):
+        if isinstance(ln, (list, tuple)):        # 한 줄 안 부분 강조
+            parts = [(t, (ink if c is None else c)) for t, c in ln]
+            text_runs(s, LX, y, CW, 84, parts, size_px=PH_COVER,
+                      weight="ExtraBold")
+        else:
+            text(s, LX, y, CW, 84, ln, size_px=PH_COVER, weight="ExtraBold",
+                 color="primary" if i >= accent_from else ink)
+        y += 74
+    rect(s, LX, y + 24, 64, 5, fill="primary")
+    if sub:
+        text(s, LX, y + 58, 700, 96, sub, size_px=PH_LEAD, weight="Medium",
+             color="body", line_spacing=1.7)
+    return s
+
+
+def photo_hero(deck, title_lines, body="", note="", image=None,
+               anchor="right", ratio=0.5, dark=False, brand="", eyebrow=""):
+    """히어로 — 한쪽 절반이 실사 사진, 반대쪽에 헤드라인(50px)."""
+    s = deck.add("surface_dark" if dark else "canvas")
+    ink = "on_dark" if dark else "ink"
+    mut = "on_dark_soft" if dark else "body"
+    pw = SW * ratio
+    photo_fill(s, SW - pw, 0, pw, T.SLIDE_H_PX, image, anchor=anchor,
+               cache_dir=_deck_cache(deck))
+    tw = SW - pw - LX - 56
+    _eyebrow(s, eyebrow, y=96, color="primary")
+    y = 132
+    for ln in title_lines:
+        text(s, LX, y, tw, 64, ln, size_px=PH_TITLE, weight="ExtraBold",
+             color=ink)
+        y += 58
+    if body:
+        text(s, LX, y + 30, tw, 150, body, size_px=PH_BODY, weight="Regular",
+             color=mut, line_spacing=1.8)
+    if note:
+        rect(s, LX, T.SLIDE_H_PX - 176, 64, 4, fill="primary")
+        text(s, LX, T.SLIDE_H_PX - 150, tw, 48, note, size_px=PH_LIST,
+             weight="Bold", color="primary", line_spacing=1.6)
+    if brand:
+        text(s, LX, T.SLIDE_H_PX - 74, 300, 24, brand, size_px=18,
+             weight="ExtraBold", color=ink)
+    return s
+
+
+def stats_photo(deck, title, stats, image=None, eyebrow="", note="",
+                anchor="center"):
+    """좌측 수치 카드 세로 스택 + 우측 실사 사진.
+    stats: [(숫자, 라벨, 설명, 출처)] 3개."""
+    s = deck.add()
+    _eyebrow(s, eyebrow)
+    _ptitle(s, title, y=78, width=700)
+    for i, st in enumerate(stats[:3]):
+        num, lab, desc, src = (list(st) + ["", "", ""])[:4]
+        y = 226 + i * 128
+        rect(s, LX, y, 620, 116, fill="surface_card", radius=12)
+        text(s, LX + 30, y + 26, 180, 66, num, size_px=PH_STAT,
+             weight="ExtraBold", color="ink")
+        rect(s, LX + 214, y + 26, 1, 64, fill="hairline")
+        text(s, LX + 244, y + 24, 356, 30, lab, size_px=PH_CARD_T,
+             weight="ExtraBold", color="ink")
+        text(s, LX + 244, y + 58, 360, 24, desc, size_px=PH_LIST,
+             weight="Regular", color="body")
+        if src:
+            text(s, LX + 244, y + 84, 360, 20, src, size_px=PH_CAP,
+                 weight="Regular", color="muted_soft")
+    photo_fill(s, 760, 226, SW - 760 - LX + 18, 372, image, anchor=anchor,
+               cache_dir=_deck_cache(deck))
+    if note:
+        rect(s, LX, 624, CW, 62, fill="surface_soft", radius=10)
+        text(s, LX + 30, 624, CW - 60, 62, note, size_px=PH_LIST,
+             weight="Bold", color="ink", valign="middle", line_spacing=1.6)
+    deck.footer(s)
+    return s
+
+
+def shots_row(deck, title, shots, eyebrow="", sub="", desc="", note="",
+              note_label="", note_sub="", bg=None):
+    """스크린샷 3장 가로 + 캡션. bg 를 주면 페이지 배경을 갈아 리듬을 준다."""
+    s = deck.add()
+    if bg:
+        rect(s, 0, 0, SW, T.SLIDE_H_PX, fill=bg)
+    _eyebrow(s, eyebrow)
+    y = _ptitle(s, title, y=78, width=700)
+    if sub:
+        text(s, LX, y + 2, 620, 30, sub, size_px=PH_LEAD, weight="Bold",
+             color="primary")
+    _pdesc(s, desc, y=86)
+    n = max(1, len(shots))
+    gap = CARD_PITCH - CARD_W
+    cw = (CW - gap * (n - 1)) / n
+    for i, (path, cap) in enumerate(shots):
+        x = LX + i * (cw + gap)
+        rect(s, x, 210, cw, 300, fill="surface_card", radius=12)
+        shot_card(s, x + 10, 220, cw - 20, 280, path, pad=6, frame=False,
+                  cache_dir=_deck_cache(deck))
+        text(s, x, 528, 40, 26, "%02d" % (i + 1), size_px=PH_LIST,
+             weight="ExtraBold", color="primary", wrap=False)
+        text(s, x + 42, 528, cw - 42, 26, cap, size_px=PH_BODY,
+             weight="Bold", color="ink")
+    if note:
+        rect(s, LX, 578, CW, 84, fill="surface_soft", radius=10)
+        text(s, LX + 30, 578, 720, 84, note, size_px=PH_LIST, weight="Bold",
+             color="ink", valign="middle", line_spacing=1.65)
+        if note_label:
+            rect(s, 872, 596, 3, 48, fill="primary")
+            text(s, 890, 598, 300, 24, note_label, size_px=PH_BODY,
+                 weight="ExtraBold", color="primary")
+            if note_sub:
+                text(s, 890, 622, 300, 22, note_sub, size_px=PH_CAP,
+                     weight="Regular", color="muted")
+    deck.footer(s)
+    return s
+
+
+def screens_showcase(deck, title, shots, eyebrow="", desc="", note="",
+                     note2="", bg="surface_soft", on_dark=False):
+    """제품 실화면 2장 — 핵심 기능 페이지. 색을 늘리지 않고 배경 톤만 바꾼다."""
+    s = deck.add()
+    rect(s, 0, 0, SW, T.SLIDE_H_PX, fill=bg)
+    ink = "on_dark" if on_dark else "ink"
+    _eyebrow(s, eyebrow, color="primary")
+    _ptitle(s, title, y=78, width=700, color=ink)
+    _pdesc(s, desc, y=86, color="on_dark_soft" if on_dark else "muted")
+    widths, xs = [700, 366], [LX, 830]
+    for i, (path, cap) in enumerate(shots[:2]):
+        if cap:
+            text(s, xs[i], 188, widths[i], 30, cap, size_px=PH_LIST,
+                 weight="Bold", color="muted" if not on_dark else "on_dark")
+        rect(s, xs[i], 224, widths[i], 372, fill="surface_card", radius=12)
+        shot_card(s, xs[i] + 10, 234, widths[i] - 20, 352, path, pad=6,
+                  frame=False, cache_dir=_deck_cache(deck))
+    if note:
+        rect(s, LX, 614, CW, 72, fill="surface_card", radius=10)
+        text(s, LX + 30, 614, 660, 72, note, size_px=PH_LIST, weight="Bold",
+             color="ink", valign="middle", line_spacing=1.65)
+        if note2:
+            rect(s, 806, 632, 1, 40, fill="hairline")
+            text(s, 838, 614, 340, 72, note2, size_px=PH_CAP,
+                 weight="Regular", color="muted", valign="middle",
+                 line_spacing=1.65)
+    deck.footer(s)
+    return s
+
+
+def split_color_photo(deck, title_lines, body="", items=None, footer_note="",
+                      image=None, eyebrow="", color="primary", ratio=0.5,
+                      anchor="center"):
+    """좌측 컬러 블록(텍스트) + 우측 실사 사진. 워크숍·현장 소개용."""
+    s = deck.add()
+    bw = SW * ratio
+    rect(s, 0, 0, bw, T.SLIDE_H_PX, fill=color)
+    photo_fill(s, bw, 0, SW - bw, T.SLIDE_H_PX, image, anchor=anchor,
+               cache_dir=_deck_cache(deck))
+    if eyebrow:
+        text(s, LX, 86, 500, 22, eyebrow.upper(), size_px=PH_EYE,
+             weight="Bold", color="on_primary", tracking_px=2.4)
+    y = 124
+    for ln in title_lines:
+        text(s, LX, y, bw - LX - 48, 62, ln, size_px=PH_TITLE,
+             weight="ExtraBold", color="on_primary")
+        y += 56
+    if body:
+        text(s, LX, y + 26, bw - LX - 56, 130, body, size_px=PH_BODY,
+             weight="Regular", color="on_primary", line_spacing=1.8)
+    if items:
+        line_div(s, LX, 400, bw - LX - 56, color="on_primary")
+        iy = 424
+        for t_, sub in items:
+            text(s, LX, iy, 170, 26, t_, size_px=PH_BODY, weight="ExtraBold",
+                 color="on_primary")
+            text(s, LX + 168, iy + 2, bw - LX - 226, 24, sub, size_px=PH_LIST,
+                 weight="Regular", color="on_primary")
+            iy += 44
+    if footer_note:
+        text(s, LX, T.SLIDE_H_PX - 108, bw - LX - 56, 26, footer_note,
+             size_px=PH_BODY, weight="ExtraBold", color="on_primary")
+    deck.footer(s, color="on_primary")
+    return s
+
+
+def profile_photo(deck, name, name_en="", role="", career=None, activity=None,
+                  image=None, eyebrow="", title="대표 강사 프로필", note=""):
+    """인물 프로필 — 좌측 사진 + 우측 2열 이력."""
+    s = deck.add()
+    _eyebrow(s, eyebrow)
+    _ptitle(s, title, y=78, width=620)
+    photo_fill(s, LX, 190, 296, 372, image, anchor="center",
+               cache_dir=_deck_cache(deck))
+    text(s, 420, 196, 300, 52, name, size_px=40, weight="ExtraBold",
+         color="ink")
+    if name_en:
+        text(s, 420 + len(name) * 44, 212, 300, 30, name_en, size_px=PH_BODY,
+             weight="SemiBold", color="muted")
+    if role:
+        text(s, 420, 254, 620, 26, role, size_px=PH_BODY, weight="Bold",
+             color="primary")
+    line_div(s, 420, 292, SW - 420 - LX, color="hairline")
+    for cx, head, arr in ((420, "주요 이력", career or []),
+                          (800, "주요 활동", activity or [])):
+        text(s, cx, 308, 240, 20, head, size_px=PH_CAP, weight="Bold",
+             color="muted", tracking_px=1.6)
+        yy = 336
+        for item in arr:
+            text(s, cx, yy, 12, 20, "·", size_px=PH_LIST, weight="Bold",
+                 color="primary")
+            text(s, cx + 16, yy, 344, 20, item, size_px=PH_LIST,
+                 weight="Regular", color="body")
+            yy += 25
+        if head == "주요 활동" and note:
+            rect(s, cx, 476, SW - cx - LX, 86, fill="surface_soft", radius=10)
+            text(s, cx + 24, 476, SW - cx - LX - 48, 86, note, size_px=PH_LIST,
+                 weight="Bold", color="ink", valign="middle", line_spacing=1.7)
+    deck.footer(s)
+    return s
+
+
+def logo_sheet(deck, title, image=None, eyebrow="", sub="", names=None,
+               cols=6):
+    """도입처 로고 — 로고 시트 이미지를 크게. 없으면 names 텍스트 그리드."""
+    s = deck.add()
+    _eyebrow(s, eyebrow)
+    _ptitle(s, title, y=78, width=900)
+    if sub:
+        text(s, LX, 146, CW, 26, sub, size_px=PH_BODY, weight="Regular",
+             color="muted")
+    if image:
+        rect(s, LX, 196, CW, 452, fill="surface_card", radius=12)
+        shot_card(s, LX + 12, 206, CW - 24, 432, image, pad=4, frame=False,
+                  cache_dir=_deck_cache(deck))
+    elif names:
+        rows = (len(names) + cols - 1) // cols
+        cwid = CW / cols
+        chh = min(80, 430 / max(1, rows))
+        for i, nm in enumerate(names):
+            x = LX + (i % cols) * cwid
+            y = 200 + (i // cols) * (chh + 10)
+            rect(s, x, y, cwid - 12, chh, fill="surface_card", radius=8)
+            text(s, x, y, cwid - 12, chh, nm, size_px=PH_LIST,
+                 weight="Regular", color="muted", align="center",
+                 valign="middle")
+    deck.footer(s)
+    return s
+
+
+def quote_grid(deck, title, quotes, eyebrow="", desc=""):
+    """현장 후기 2x2. quotes: [(본문, 화자)]."""
+    s = deck.add()
+    _eyebrow(s, eyebrow)
+    _ptitle(s, title, y=78, width=640)
+    _pdesc(s, desc, y=86)
+    for i, (body, who) in enumerate(quotes[:4]):
+        x = LX + (i % 2) * (CW / 2 + 16)
+        y = 226 + (i // 2) * 216
+        w = CW / 2 - 16
+        rect(s, x, y, w, 198, fill="surface_card", radius=12)
+        # 따옴표 글리프는 아래로 늘어나므로 본문과 y 를 충분히 벌린다
+        text(s, x + 28, y + 12, 48, 34, chr(8220), size_px=32,
+             weight="ExtraBold", color="primary")
+        text(s, x + 28, y + 62, w - 56, 96, body, size_px=PH_LIST,
+             weight="Regular", color="body", line_spacing=1.75)
+        text(s, x + 28, y + 162, w - 56, 24, chr(8212) + " " + who,
+             size_px=PH_CAP, weight="ExtraBold", color="primary")
+    deck.footer(s)
+    return s
+
+
+def radial_map(deck, title, center, center_sub="", groups=None, desc="",
+               eyebrow="", radius=178, node=96, cx=420, cy=430, foot_note=""):
+    """방사형 개념 맵 — 중앙 원 + 외곽 노드 + 우측 그룹 해설."""
+    import math
+    s = deck.add()
+    _eyebrow(s, eyebrow)
+    _ptitle(s, title, y=78, width=600, size=42)
+    _pdesc(s, desc, y=86, x=760, w=438)
+    groups = groups or []
+    total = sum(len(g[3]) for g in groups) or 1
+    step = 360.0 / total
+    oval(s, cx - radius - 56, cy - radius - 56, (radius + 56) * 2,
+         (radius + 56) * 2, fill=None, line="hairline", line_w=1.0)
+    idx = 0
+    for _, _, color, nodes in groups:
+        for nm, en in nodes:
+            ang = math.radians(-90 + idx * step)
+            nx = cx + radius * math.cos(ang) - node / 2
+            ny = cy + radius * math.sin(ang) - node / 2
+            oval(s, nx, ny, node, node, fill="surface_card", line=color,
+                 line_w=2.0)
+            text(s, nx, ny + node * 0.26, node, 22, nm, size_px=PH_LIST,
+                 weight="ExtraBold", color="ink", align="center")
+            if en:
+                text(s, nx, ny + node * 0.5, node, 18, en, size_px=10,
+                     weight="Regular", color="muted", align="center")
+            ln_ = s.shapes.add_connector(
+                1, px(cx + 62 * math.cos(ang)), px(cy + 62 * math.sin(ang)),
+                px(cx + (radius - node / 2 - 6) * math.cos(ang)),
+                px(cy + (radius - node / 2 - 6) * math.sin(ang)))
+            ln_.line.color.rgb = rgb("hairline")
+            ln_.line.width = pt(1.0)
+            ln_.shadow.inherit = False
+            idx += 1
+    oval(s, cx - 58, cy - 58, 116, 116, fill="surface_dark")
+    text(s, cx - 58, cy - 24, 116, 26, center, size_px=22, weight="ExtraBold",
+         color="on_dark", align="center")
+    if center_sub:
+        text(s, cx - 58, cy + 4, 116, 22, center_sub, size_px=PH_CAP,
+             weight="Medium", color="on_dark_soft", align="center")
+    # 그룹 카드 — 번호 배지 색을 노드 색과 맞춘다.
+    gx = 760
+    gy = 214
+    for gi, (nm, en, color, nodes) in enumerate(groups):
+        rect(s, gx, gy, SW - gx - LX, 106, fill="surface_card", radius=10)
+        rect(s, gx, gy, 6, 106, fill=color)
+        oval(s, gx + 22, gy + 16, 38, 38, fill=color)
+        text(s, gx + 22, gy + 16, 38, 38, "%02d" % (gi + 1), size_px=11,
+             weight="ExtraBold", color="on_primary", align="center",
+             valign="middle", wrap=False)
+        text(s, gx + 70, gy + 18, 220, 32, nm, size_px=PH_CARD_T,
+             weight="ExtraBold", color="ink")
+        if en:
+            text(s, gx + 70, gy + 52, 240, 22, en, size_px=PH_CAP,
+                 weight="Medium", color="muted")
+        text(s, gx + 220, gy + 34, 300, 24, " · ".join(n[0] for n in nodes),
+             size_px=PH_LIST, weight="Bold", color="body")
+        gy += 118
+    if foot_note:
+        text(s, gx, 588, SW - gx - LX, 60, foot_note, size_px=PH_CAP,
+             weight="Regular", color="muted", line_spacing=1.7)
+    deck.footer(s)
+    return s
+
+
+def closing_qr(deck, title, sub="", offers=None, qr=None, contacts=None,
+               eyebrow="GET STARTED", qr_caption="", qr_url="", deco=None,
+               offer_label="", dark=True):
+    """클로징 — 오퍼 카드 + QR + 연락처 3열."""
+    s = deck.add("surface_dark" if dark else "surface_soft")
+    ink = "on_dark" if dark else "ink"
+    mut = "on_dark_soft" if dark else "muted"
+    card = "surface_dark_elevated" if dark else "surface_card"
+    acc = _accent_on_dark() if dark else "primary"
+    _eyebrow(s, eyebrow, y=52, color=acc)
+    text(s, LX, 122, 900, 74, title, size_px=PH_COVER - 15, weight="ExtraBold",
+         color=ink)
+    if sub:
+        text(s, LX, 200, 800, 30, sub, size_px=PH_LEAD, weight="Regular",
+             color=mut)
+    if offer_label:
+        text(s, LX, 262, 460, 24, offer_label, size_px=PH_BODY,
+             weight="ExtraBold", color=acc, tracking_px=1.2)
+    y = 296
+    for t_, d_ in (offers or []):
+        rect(s, LX, y, 580, 74, fill=card, radius=10)
+        text(s, LX + 28, y + 14, 520, 26, t_, size_px=PH_CARD_T - 3,
+             weight="Bold", color=ink)
+        text(s, LX + 28, y + 44, 520, 22, d_, size_px=PH_CAP,
+             weight="Regular", color=mut)
+        y += 84
+    if qr:
+        rect(s, 706, 296, 216, 216, fill="canvas", radius=10)
+        s.shapes.add_picture(str(qr), px(718), px(308), px(192), px(192))
+        if qr_caption:
+            text(s, 706, 526, 216, 22, qr_caption, size_px=PH_LIST,
+                 weight="Bold", color=ink, align="center")
+        if qr_url:
+            text(s, 686, 550, 256, 20, qr_url, size_px=PH_CAP,
+                 weight="Regular", color=mut, align="center")
+    if deco:
+        # 3D 렌더의 검정 배경을 페이지 배경색으로 치환 — 밝은 페이지에서
+        # 검정 사각형이 그대로 보이는 사고 방지
+        blended = blend_bg(deco, T.COLORS["surface_dark" if dark else "surface_soft"],
+                           cache_dir=_deck_cache(deck))
+        if blended:
+            photo_fill(s, 962, 302, 204, 204, blended,
+                       cache_dir=_deck_cache(deck))
+    if contacts:
+        line_div(s, LX, 594, CW,
+                 color="surface_dark_elevated" if dark else "hairline")
+        for i, (lab, val) in enumerate(contacts[:3]):
+            x = LX + i * 356
+            text(s, x, 618, 300, 20, lab.upper(), size_px=PH_CAP,
+                 weight="Bold", color=mut, tracking_px=1.6)
+            text(s, x, 640, 356, 28, val, size_px=PH_CARD_T - 3,
+                 weight="Bold", color=ink)
+    return s
+
+
+def big_message(deck, lines, eyebrow="", sub="", note="", dark=True,
+                size=None):
+    """다크 임팩트 메시지 — 큰 문장 2~3줄, 한 줄 안 부분 강조 가능.
+
+    lines: [[(문자열, 색), ...], ...]  줄마다 run 조합(한 줄 안 부분 강조 가능).
+    poster()는 size_px=140 고정이라 긴 문장에서 넘치므로 이 레이아웃을 쓴다.
+    """
+    s = deck.add("surface_dark" if dark else "surface_soft")
+    ink = "on_dark" if dark else "ink"
+    mut = "on_dark_soft" if dark else "muted"
+    acc = _accent_on_dark() if dark else "primary"
+    _eyebrow(s, eyebrow, y=52, color=acc)
+    sz = size or PH_HUGE
+    y = 196
+    for parts in lines:
+        norm = [(t, (ink if c is None else (acc if (dark and c == "primary") else c)))
+                for t, c in parts]
+        text_runs(s, LX, y, CW, sz + 28, norm, size_px=sz, weight="ExtraBold",
+                  line_spacing=1.12)
+        y += sz + 14
+    rect(s, LX, y + 30, 64, 5, fill=acc)
+    if sub:
+        text(s, LX, y + 62, 860, 100, sub, size_px=PH_LEAD, weight="Regular",
+             color=mut, line_spacing=1.8)
+    if note:
+        text(s, LX, T.SLIDE_H_PX - 116, 900, 24, note, size_px=PH_CAP,
+             weight="Regular", color=mut)
+    deck.footer(s, dark=dark)
+    return s
+
+
+
+
+def _rewrap_ko(txt, limit):
+    """문단별로 limit 초과 줄을 공백 경계에서 재개행(한국어 안전판)."""
+    out = []
+    for para in txt.split("\n"):
+        if len(para) <= limit:
+            out.append(para)
+            continue
+        words, line = para.split(" "), ""
+        for w in words:
+            cand = (line + " " + w).strip()
+            if len(cand) > limit and line:
+                out.append(line)
+                line = w
+            else:
+                line = cand
+        if line:
+            out.append(line)
+    return "\n".join(out)
+
+
+def concept_wide(deck, term, definition, formula="", example="",
+                 eyebrow="Key Concept"):
+    """concept 개선판: term 크기 자동(넘침 방지), 요소를 흐름식으로 배치,
+    예시 박스 확대 + 긴 줄 자동 재개행. (기존 concept은 유지)"""
+    s = deck.add("canvas")
+    has_ex = bool(example)
+    left_w = 640 if has_ex else 1040
+    definition = _rewrap_ko(definition, 22)
+    if example:
+        example = _rewrap_ko(example, 18)
+    text(s, LX, 84, 400, 24, eyebrow.upper(), type_token="caption_upper",
+         color="primary")
+    lines = term.split("\n")
+    maxlen = max(len(l) for l in lines)
+    size = int(min(92, max(40, left_w / (maxlen * 1.0))))
+    y = 122
+    term_h = int(len(lines) * size * 1.18) + 8
+    text(s, LX, y, left_w, term_h, term, type_token="display_xl", color="ink",
+         weight="Black", size_px=size, line_spacing=1.12)
+    y += term_h + 18
+    def_lines = definition.split("\n")
+    text(s, LX, y, left_w, len(def_lines) * 40 + 10, definition,
+         type_token="title_lg", color="body", weight="Regular",
+         line_spacing=1.5)
+    y += len(def_lines) * 42 + 26
+    if formula:
+        f_size = 24 if max(len(l) for l in formula.split("\n")) <= 24 else 18
+        rect(s, LX, y, left_w, 78, fill="surface_card", radius=12)
+        text(s, LX + 20, y, left_w - 40, 78, formula, color="ink",
+             align="center", valign="middle", weight="SemiBold",
+             size_px=f_size)
+    if has_ex:
+        bx = LX + left_w + 40
+        bw = CW + LX - bx
+        ex_lines = example.split("\n")
+        bh = max(240, 96 + len(ex_lines) * 44)
+        rect(s, bx, 122, bw, bh, fill="surface_dark", radius=12)
+        text(s, bx + 30, 152, bw - 60, 24, "예시", type_token="caption_upper",
+             color="accent_amber")
+        text(s, bx + 30, 188, bw - 60, bh - 96, example, type_token="body_md",
+             color="on_dark_soft", line_spacing=1.6)
     deck.footer(s)
     return s

@@ -4,8 +4,11 @@
 스타일, `{colors.*}` `{typography.*}` `{rounded.*}` 토큰을 쓰는 문서)을 붙여넣으면,
 그 내용을 읽어 **PPT Design 테마 JSON**으로 변환한다. 이후 그 테마로 덱을 만든다.
 
-> 참고: https://getdesign.md/ — URL/브랜드에서 이런 디자인 시스템 명세를 생성하는 도구.
-> 이 스킬은 그 산출물을 받아 PPTX 테마로 재현한다.
+> 받는 곳: 무료 모음 https://github.com/VoltAgent/awesome-design-md (`design-md/<사이트>/DESIGN.md`) ·
+> 더 많은 목록 https://getdesign.md/design-md (일부는 유료 Catalog Pass이거나 로그인이 필요하다).
+> DESIGN.md는 맨 위 YAML에 `colors:`(primary · canvas · surface-card · ink · hairline …)와
+> `typography:`(fontFamily · fontSize · fontWeight …)를 담는다. 아래 표의 `{colors.primary}`는
+> 그 YAML의 `colors.primary` 값을 뜻한다. 이 스킬은 그 값을 받아 PPTX 테마로 재현한다.
 
 ## 절차
 1. 명세에서 **canvas 색의 밝기**로 라이트/다크를 판별한다(near-black이면 `mode:"dark"`).
@@ -14,7 +17,9 @@
    가장 가까운 값을 쓴다.
 3. 폰트: 본문/디스플레이 = 명세의 sans, mono = 명세의 mono. 굵기별 패밀리가
    명시돼 있으면 `weights`에 넣는다.
-4. `theme.json`을 `OUTPUT/<프로젝트>/theme.json`에 저장하고 `Deck(theme=...)`로 쓴다.
+4. 명세 글꼴이 Inter·Geist처럼 **한글이 없는 영문 글꼴이면** `fonts.ko`를 `"Pretendard"`로 둔다
+   (영문은 명세 글꼴, 한글은 Pretendard). 한글 덱이면 빠뜨리지 않는다.
+5. `theme.json`을 `OUTPUT/ppt-design/<프로젝트>/theme.json`에 저장하고 `Deck(theme=...)`로 쓴다.
 
 ## 색 슬롯 매핑 (getdesign.md → PPT Design)
 | PPT Design 슬롯 | 라이트 명세 출처 | 다크 명세 출처 |
@@ -52,18 +57,20 @@
 import theme as th
 # 라이트 브랜드
 t = th.from_seeds(font="Inter", primary="#...", canvas="#FFFFFF",
-                  ink="#0F172A", dark="#0B1220", mode="light", name="brand")
+                  ink="#0F172A", dark="#0B1220", mode="light", name="brand",
+                  ko="Pretendard")          # Inter엔 한글이 없어서 한글은 Pretendard
 # 다크 브랜드 (Voltagent류) — dark 생략, canvas가 near-black
 t = th.from_seeds(font="Inter", primary="#00D992", canvas="#101010",
                   ink="#F2F2F2", accent2="#2FD6A1", accent3="#10B981",
-                  mode="dark", name="brand")
-th.save(t, "OUTPUT/brand/theme.json")
+                  mode="dark", name="brand", ko="Pretendard")
+th.save(t, "OUTPUT/ppt-design/brand/theme.json")
 ```
 정확도를 높이려면 명세에 적힌 정확한 hex(hairline, body, muted 등)를 생성된 dict에
 덮어쓴다.
 
 ## 폰트
 - 본문/디스플레이 = 명세 sans(예: Inter), mono = 명세 mono(예: SF Mono).
+- 한글 = `fonts.ko`(명세 글꼴에 한글이 없으면 `"Pretendard"`).
 - 그 폰트가 **보는 PC에 설치돼 있어야** 동일하게 렌더된다(python-pptx는 임베드 불가).
   미설치 시 시스템 폰트로 폴백 — 색/레이아웃은 유지되지만 글꼴이 달라진다.
 - SF Mono 등 OS 전용 폰트는 명세대로 두되, 대체 폰트(JetBrains/Geist/Cascadia Mono)를

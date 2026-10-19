@@ -71,9 +71,14 @@ success warning error
   (예: 세리프 디스플레이 + 산세리프 본문). 같게 두면 단일 폰트.
 - `fonts.weights` — 굵기별 전용 패밀리명(예: "Pretendard Light"). 없으면 본문 폰트 +
   bold 근사(Thin/Light 같은 미세 굵기는 Regular로 보임).
+- `fonts.ko` / `fonts.ko_weights` — **한글 글꼴.** 본문 글꼴이 Inter처럼 한글이 없는 영문 글꼴이면
+  `"ko": "Pretendard"`를 준다. 그러면 영문은 본문 글꼴, 한글은 Pretendard로 그린다.
+  안 주면 한글이 PC마다 다른 글꼴로 대신 그려져 한 문장 안에서 굵기가 섞여 보인다.
+  `from_seeds(..., ko="Pretendard")`로도 줄 수 있다. 다크 프리셋 `voltagent-dark`가 이렇게 돼 있다.
 - python-pptx는 폰트를 파일에 임베드하지 못한다 → 보는 PC에 폰트 설치 필요.
 
 ## 색 대비 주의
 - `canvas`는 밝게, `ink`는 충분히 어둡게(대비). `dark`는 충분히 어둡게.
-- 어두운 캔버스 테마(다크 모드)는 현재 레이아웃 가정(밝은 캔버스)과 어긋날 수 있다.
-  필요하면 canvas=어둡게 + on_* 반전한 별도 테마를 직접 dict로 정의한다.
+- 어두운 캔버스 테마는 `mode: "dark"`로 만든다(위 «라이트 / 다크 모드»).
+- 강조색(primary)이 어두운 서피스와 비슷하면(ink-mono처럼 강조색이 검정), 어두운 장의
+  강조 글자·버튼은 자동으로 밝은 글자색(on_dark)으로 바뀐다.

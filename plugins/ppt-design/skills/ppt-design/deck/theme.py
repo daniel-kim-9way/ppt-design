@@ -121,10 +121,12 @@ def build_palette_dark(primary, canvas, ink, accent2=None, accent3=None,
 
 def from_seeds(font, primary, canvas, ink, dark=None, accent2=None, accent3=None,
                mono="Consolas", display=None, weights=None, name="custom",
-               mode="light"):
+               mode="light", ko=None, ko_weights=None):
     """폰트 + 시드 색 → 완성된 테마 dict.
     mode='light': dark(다크 서피스 시드) 필요. mode='dark': near-black 브랜드(dark 생략).
-    weights: {굵기명: 패밀리} (Pretendard처럼 굵기별 패밀리가 있으면 지정)."""
+    weights: {굵기명: 패밀리} (Pretendard처럼 굵기별 패밀리가 있으면 지정).
+    ko: 한글 글꼴. font 가 Inter처럼 한글이 없는 글꼴이면 "Pretendard" 를 준다.
+    ko_weights: 한글 글꼴의 굵기별 패밀리(있을 때만)."""
     if mode == "dark":
         colors = build_palette_dark(primary, canvas, ink, accent2, accent3)
     else:
@@ -135,6 +137,10 @@ def from_seeds(font, primary, canvas, ink, dark=None, accent2=None, accent3=None
         "fonts": {"body": font, "display": display or font, "mono": mono,
                   "weights": weights or {}},
     }
+    if ko:
+        t["fonts"]["ko"] = ko
+        if ko_weights:
+            t["fonts"]["ko_weights"] = ko_weights
     return t
 
 
